@@ -1,0 +1,20 @@
+name: BOTW disk space check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: xcode-27
+    steps:
+      - name: Check reclaimable disk space
+        shell: bash
+        run: |
+          echo "=== Initial space ==="
+          df -h /
+          echo "=== Xcode installations ==="
+          du -sh /Applications/Xcode*.app 2>/dev/null || true
+          echo "=== Large tool directories ==="
+          du -sh /opt/homebrew /usr/local /Library/Developer /Users/runner/Library/Developer 2>/dev/null || true
+          echo "=== Available space ==="
+          df -h /
