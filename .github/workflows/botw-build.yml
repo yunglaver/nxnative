@@ -1,0 +1,95 @@
+name: Build BOTW IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -e
+          sudo rm -rf /Applications/Xcode_27.2_Release_Candidate.app
+          sudo rm -rf /Applications/Xcode_27.7.app
+          df -h /
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -e
+          export DEVELOPER_DIR=/Applications/Xcode_27.1.app/Contents/Developer
+          xcodebuild -version
+          xcodebuild -downloadComponent MetalToolchain
+          brew install xcodegen zstd glslang
+          brew install --cask dotnet-sdk
+          python3 -m venv "$RUNNER_TEMP/build-venv"
+          "$RUNNER_TEMP/build-venv/bin/pip" install lz4 'capstone>=5,<6' fonttools nsz zbic
+          df -h /
+
+      - name: Download game
+        env:
+          ICLOUD_LINKS: ${{ secrets.ICLOUD_LINKS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/build-venv/bin/pip" install icloud-resolver requests
+          mkdir -p "$RUNNER_TEMP/BOTW"
+          "$RUNNER_TEMP/build-venv/bin/python" - <<'PY'
+          import os
+          import requests
+          from pathlib import Path
+          from icloud_resolver import resolve_icloud_link
+
+          folder = Path(os.environ["RUNNER_TEMP"]) / "BOTW"
+          links = os.environ["ICLOUD_LINKS"].splitlines()
+
+          for link in links:
+              if not link.strip():
+                  continue
+              url, filename = resolve_icloud_link(link.strip())
+              target = folder / Path(filename).name
+              print("Downloading:", target.name, flush=True)
+              with requests.get(url, stream=True, timeout=(30, 180)) as response:
+                  response.raise_for_status()
+                  with target.open("wb") as output:
+                      for chunk in response.iter_content(1024 * 1024):
+                          if chunk:
+                              output.write(chunk)
+              print("Downloaded:", target.name, flush=True)
+
+          assert len(list(folder.iterdir())) == 4
+          PY
+          df -h /
+
+      - name: Build IPA
+        env:
+          PROD_KEYS: ${{ secrets.PROD_KEYS }}
+          DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$PROD_KEYS" > "$RUNNER_TEMP/prod.keys"
+          unset PROD_KEYS
+          "$RUNNER_TEMP/build-venv/bin/python" scripts/build_ipa_from_nsp.py \
+            "$RUNNER_TEMP/BOTW" \
+            -k "$RUNNER_TEMP/prod.keys" \
+            --no-keep-extracted \
+            --progress lines
+          rm -f "$RUNNER_TEMP/prod.keys"
+          df -h /
+          find "$RUNNER_TEMP/BOTW" -maxdepth 1 -name '*.ipa' -ls
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOTW-iPhone-IPA
+          path: ${{ runner.temp }}/BOTW/*.ipa
+          if-no-files-found: error
+          retention-days: 1
