@@ -1,0 +1,28 @@
+
+name: Check BOTW build environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: xcode-27
+
+    steps:
+      - name: Check macOS and Xcode
+        shell: bash
+        run: |
+          echo "=== macOS ==="
+          sw_vers
+          echo "=== CPU ==="
+          uname -m
+          echo "=== Xcode ==="
+          xcodebuild -version
+          echo "=== Installed Xcodes ==="
+          ls -d /Applications/Xcode*.app || true
+          echo "=== iOS SDK ==="
+          xcodebuild -showsdks | grep -i ios || true
+          echo "=== Metal compiler ==="
+          xcrun -f metal || true
+          echo "=== Free disk space ==="
+          df -h /
