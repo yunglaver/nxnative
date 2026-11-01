@@ -87,36 +87,52 @@ jobs:
           umask 077
           printf '%s' "$PROD_KEYS" > "$RUNNER_TEMP/prod.keys"
           unset PROD_KEYS
-          # Wait until the IPA packer starts, then remove original game downloads.
-          # By this point extraction and Xcode compilation have finished.
-          (
-            echo "Waiting for IPA packaging to start..."
-            for i in $(seq 1 1800); do
-              if pgrep -f '[p]ack_ipa.py' >/dev/null; then
-                echo "=== IPA PACKER STARTED: REMOVING ORIGINAL NSZ/NSP ==="
-                find "$RUNNER_TEMP/BOTW" -maxdepth 1 -type f \( -iname '*.nsz' -o -iname '*.nsp' \) -print -delete
-                sync
-                df -h /
-                exit 0
-              fi
-              sleep 5
-            done
-            echo "IPA packer not detected within 150 minutes"
-          ) &
-          cleanup_watcher=$!
           "$RUNNER_TEMP/build-venv/bin/python" scripts/build_ipa_from_nsp.py \
             "$RUNNER_TEMP/BOTW" \
             -k "$RUNNER_TEMP/prod.keys" \
-            --no-keep-extracted \
+            --romfs separate \
+            --keep-extracted \
             --progress lines
           rm -f "$RUNNER_TEMP/prod.keys"
           df -h /
           find "$RUNNER_TEMP/BOTW" -maxdepth 1 -name '*.ipa' -ls
 
+      - name: Collect separate RomFS image
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Files after build ==="
+          df -h /
+          find "$RUNNER_TEMP/BOTW" -type f \( -name '*.ipa' -o -iname 'RomFS.img' \) -exec ls -lh {} \;
+
+          ipa_count=$(find "$RUNNER_TEMP/BOTW" -maxdepth 1 -type f -name '*.ipa' | wc -l | tr -d ' ')
+          image_count=$(find "$RUNNER_TEMP/BOTW" -type f -iname 'RomFS.img' | wc -l | tr -d ' ')
+
+          [ "$ipa_count" = 1 ] || { echo "Expected one IPA, found $ipa_count"; exit 1; }
+          [ "$image_count" = 1 ] || { echo "Expected one RomFS.img, found $image_count"; exit 1; }
+
+          mkdir -p "$RUNNER_TEMP/OUTPUT"
+          ipa=$(find "$RUNNER_TEMP/BOTW" -maxdepth 1 -type f -name '*.ipa' -print -quit)
+          image=$(find "$RUNNER_TEMP/BOTW" -type f -iname 'RomFS.img' -print -quit)
+
+          ln "$ipa" "$RUNNER_TEMP/OUTPUT/$(basename "$ipa")"
+          ln "$image" "$RUNNER_TEMP/OUTPUT/romfs.img"
+
+          ls -lh "$RUNNER_TEMP/OUTPUT"
+          df -h /
+
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: BOTW-iPhone-IPA
-          path: ${{ runner.temp }}/BOTW/*.ipa
+          path: ${{ runner.temp }}/OUTPUT/*.ipa
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload RomFS
+        uses: actions/upload-artifact@v4
+        with:
+          name: BOTW-RomFS
+          path: ${{ runner.temp }}/OUTPUT/romfs.img
           if-no-files-found: error
           retention-days: 1
