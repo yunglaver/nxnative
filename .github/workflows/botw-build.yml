@@ -87,6 +87,23 @@ jobs:
           umask 077
           printf '%s' "$PROD_KEYS" > "$RUNNER_TEMP/prod.keys"
           unset PROD_KEYS
+          # Wait until the IPA packer starts, then remove original game downloads.
+          # By this point extraction and Xcode compilation have finished.
+          (
+            echo "Waiting for IPA packaging to start..."
+            for i in $(seq 1 1800); do
+              if pgrep -f '[p]ack_ipa.py' >/dev/null; then
+                echo "=== IPA PACKER STARTED: REMOVING ORIGINAL NSZ/NSP ==="
+                find "$RUNNER_TEMP/BOTW" -maxdepth 1 -type f \( -iname '*.nsz' -o -iname '*.nsp' \) -print -delete
+                sync
+                df -h /
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "IPA packer not detected within 150 minutes"
+          ) &
+          cleanup_watcher=$!
           "$RUNNER_TEMP/build-venv/bin/python" scripts/build_ipa_from_nsp.py \
             "$RUNNER_TEMP/BOTW" \
             -k "$RUNNER_TEMP/prod.keys" \
