@@ -17,6 +17,10 @@ jobs:
           set -e
           sudo rm -rf /Applications/Xcode_27.2_Release_Candidate.app
           sudo rm -rf /Applications/Xcode_27.7.app
+          sudo rm -rf /Users/runner/Library/Android/sdk
+          sudo rm -rf /Users/runner/hostedtoolcache/CodeQL
+          echo "=== FREE SPACE AFTER CLEANUP ==="
+          df -h /
           echo "=== Disk usage ==="
           df -h /
           for dir in /Applications /opt/homebrew /usr/local /Library/Developer /Users/runner/Library/Developer /Users/runner/Library/Caches; do
