@@ -17,7 +17,13 @@ jobs:
           set -e
           sudo rm -rf /Applications/Xcode_27.2_Release_Candidate.app
           sudo rm -rf /Applications/Xcode_27.7.app
+          echo "=== Disk usage ==="
           df -h /
+          for dir in /Applications /opt/homebrew /usr/local /Library/Developer /Users/runner/Library/Developer /Users/runner/Library/Caches; do
+            sudo du -sh "$dir" 2>/dev/null || true
+          done
+          echo "=== Available volumes ==="
+          df -h
 
       - name: Install dependencies
         shell: bash
