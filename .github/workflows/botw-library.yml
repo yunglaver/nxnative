@@ -1,0 +1,18 @@
+name: BOTW Library disk analysis
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: xcode-27
+    steps:
+      - name: Find large directories
+        shell: bash
+        run: |
+          echo "=== RUNNER LIBRARY ==="
+          sudo du -h -d 2 /Users/runner/Library 2>/dev/null | sort -h | tail -35
+          echo "=== HOSTED TOOLCACHE ==="
+          sudo du -h -d 2 /Users/runner/hostedtoolcache 2>/dev/null | sort -h | tail -20
+          echo "=== DISK ==="
+          df -h /
