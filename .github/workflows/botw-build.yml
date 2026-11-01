@@ -44,37 +44,52 @@ jobs:
 
       - name: Download game
         env:
-          ICLOUD_LINKS: ${{ secrets.ICLOUD_LINKS }}
+          GH_TOKEN: ${{ secrets.BOTW_ASSETS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/build-venv/bin/pip" install icloud-resolver requests
-          mkdir -p "$RUNNER_TEMP/BOTW"
-          "$RUNNER_TEMP/build-venv/bin/python" - <<'PY'
-          import os
-          import requests
+          mkdir -p "$RUNNER_TEMP/BOTW" "$RUNNER_TEMP/BOTW_PARTS"
+
+          gh release download botw-input-v1 \
+            --repo yunglaver/botw-build-assets \
+            --dir "$RUNNER_TEMP/BOTW_PARTS"
+
+          "$RUNNER_TEMP/build-venv/bin/python" - <<'RESTORE'
           from pathlib import Path
-          from icloud_resolver import resolve_icloud_link
+          import os
 
-          folder = Path(os.environ["RUNNER_TEMP"]) / "BOTW"
-          links = os.environ["ICLOUD_LINKS"].splitlines()
+          parts = Path(os.environ["RUNNER_TEMP"]) / "BOTW_PARTS"
+          output = Path(os.environ["RUNNER_TEMP"]) / "BOTW"
 
-          for link in links:
-              if not link.strip():
-                  continue
-              url, filename = resolve_icloud_link(link.strip())
-              target = folder / Path(filename).name
-              print("Downloading:", target.name, flush=True)
-              with requests.get(url, stream=True, timeout=(30, 180)) as response:
-                  response.raise_for_status()
-                  with target.open("wb") as output:
-                      for chunk in response.iter_content(1024 * 1024):
-                          if chunk:
-                              output.write(chunk)
-              print("Downloaded:", target.name, flush=True)
+          names = [
+              "The Legend of Zelda Breath of the Wild [01007EF00011E000][v0] (13.48 GB).nsz",
+              "The Legend of Zelda Breath of the Wild [01007EF00011E800][v1114112] (0.94 GB).nsz",
+              "The Legend of Zelda Breath of the Wild [DLC The Champions Ballad] [01007EF00011F002][v196608].nsp",
+              "The Legend of Zelda Breath of the Wild [DLC The Master Trials] [01007EF00011F001][v196608] (1.30 GB).nsz",
+          ]
 
-          assert len(list(folder.iterdir())) == 4
-          PY
+          groups = [
+              list(range(0, 7)),
+              [7],
+              [8],
+              [9],
+          ]
+
+          for name, indices in zip(names, groups):
+              target = output / name
+              with target.open("wb") as dest:
+                  for i in indices:
+                      source = parts / f"botw-part-{i:02d}.bin"
+                      assert source.is_file(), f"Missing {source}"
+                      with source.open("rb") as inp:
+                          while chunk := inp.read(8 * 1024 * 1024):
+                              dest.write(chunk)
+              print(f"Restored {target.name}: {target.stat().st_size} bytes", flush=True)
+
+          assert len(list(output.iterdir())) == 4
+          RESTORE
+
+          rm -rf "$RUNNER_TEMP/BOTW_PARTS"
           df -h /
 
       - name: Build IPA
