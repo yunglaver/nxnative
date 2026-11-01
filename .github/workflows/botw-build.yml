@@ -87,6 +87,23 @@ jobs:
           umask 077
           printf '%s' "$PROD_KEYS" > "$RUNNER_TEMP/prod.keys"
           unset PROD_KEYS
+          # Remove downloaded NSZ/NSP only after IPA packaging starts.
+          # Extracted RomFS.img, DLC and shaders are preserved.
+          (
+            for i in $(seq 1 1800); do
+              if pgrep -f '[p]ack_ipa.py' >/dev/null; then
+                echo "=== IPA PACKING STARTED: FREEING SOURCE ARCHIVES ==="
+                find "$RUNNER_TEMP/BOTW" -maxdepth 1 -type f \
+                  \( -iname '*.nsz' -o -iname '*.nsp' \) -print -delete
+                sync
+                df -h /
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "WARNING: IPA packer was not detected"
+          ) &
+
           "$RUNNER_TEMP/build-venv/bin/python" scripts/build_ipa_from_nsp.py \
             "$RUNNER_TEMP/BOTW" \
             -k "$RUNNER_TEMP/prod.keys" \
