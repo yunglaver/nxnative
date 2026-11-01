@@ -1,0 +1,20 @@
+name: BOTW storage investigation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: xcode-27
+    steps:
+      - name: Inspect storage
+        shell: bash
+        run: |
+          echo "=== DISK ==="
+          df -h
+          echo "=== LARGE DIRECTORIES ==="
+          for dir in /Applications /opt/homebrew /usr/local /Library/Developer /Users/runner/Library /Users/runner/hostedtoolcache /opt/hostedtoolcache; do
+            sudo du -sh "$dir" 2>/dev/null || true
+          done
+          echo "=== APFS VOLUMES ==="
+          diskutil apfs list
